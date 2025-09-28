@@ -24,24 +24,59 @@ resource "aws_iam_policy" "policy" {
     Version = "2012-10-17"
     Statement = [
       {
+        // CloudWatch Logs permissions
         Action = [
-          // I plan to use DynamoDB later
-          "dynamodb:DescribeStream",
-          "dynamodb:GetRecords",
-          "dynamodb:GetShardIterator",
-          "dynamodb:ListStreams",
           "logs:CreateLogGroup",
           "logs:CreateLogStream",
-          "logs:PutLogEvents",
-          // To use Parameter Store
-          "ssm:GetParameter",
-          // It needs to decrypt Parameter Store's Secure String:https://docs.aws.amazon.com/ja_jp/systems-manager/latest/userguide/ps-integration-lambda-extensions.html
+          "logs:PutLogEvents"
+        ]
+        Effect   = "Allow"
+        Resource = "arn:aws:logs:*:*:*"
+      },
+      {
+        // Parameter Store permissions - restricted to specific parameters
+        Action = [
+          "ssm:GetParameter"
+        ]
+        Effect = "Allow"
+        Resource = [
+          aws_ssm_parameter.slack_bot_token.arn,
+          aws_ssm_parameter.slack_signin_secret.arn
+        ]
+      },
+      {
+        // KMS permissions for Parameter Store decryption
+        Action = [
           "kms:Decrypt"
         ]
         Effect = "Allow"
-        # If you want to grant limited access, please change here
-        Resource = "*"
+        Resource = [
+          "arn:aws:kms:*:*:key/*"
+        ]
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = "ssm.*.amazonaws.com"
+          }
+        }
       },
+      {
+        // DynamoDB permissions - restricted to project tables
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:Query",
+          "dynamodb:Scan",
+          "dynamodb:BatchGetItem",
+          "dynamodb:BatchWriteItem"
+        ]
+        Effect = "Allow"
+        Resource = [
+          aws_dynamodb_table.event_triggered.arn,
+          "${aws_dynamodb_table.event_triggered.arn}/index/*"
+        ]
+      }
     ]
   })
 }

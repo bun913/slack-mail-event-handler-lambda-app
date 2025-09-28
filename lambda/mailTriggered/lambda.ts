@@ -1,6 +1,7 @@
 import { Context, Callback, APIGatewayProxyEvent, APIGatewayProxyResultV2 } from "aws-lambda"
 import { App, AwsLambdaReceiver } from "@slack/bolt"
 import { getParameter } from "./getSecret";
+import { isEmailForwardingMessage, extractEmailContent, extractPaymentId } from "./eventHandler";
 
 let awsLambdaHandler: AwsLambdaReceiver
 let app: App;
@@ -18,8 +19,32 @@ const initializeApp = async () => {
     receiver: awsLambdaHandler
   });
 
+  // Handle all message events to detect email forwarding
+  app.event('message', async ({ event, say }) => {
+    // Check if this is an email forwarding message
+    if (isEmailForwardingMessage(event)) {
+      console.log('📧 Email forwarding detected!')
+
+      const emailContent = extractEmailContent(event)
+      if (emailContent) {
+        console.log('Email content extracted:', emailContent.substring(0, 200) + '...')
+
+        const paymentId = extractPaymentId(emailContent)
+        if (paymentId) {
+          console.log('🎯 Found payment ID:', paymentId)
+
+          await say({
+            text: `支払ID: ${paymentId} を検出しました！`,
+            channel: event.channel
+          })
+        }
+      }
+    }
+  })
+
+  // Keep the hello handler for testing
   app.message("hello", async ({ message, say }) => {
-    console.log(message)
+    console.log('Hello message:', JSON.stringify(message))
     await say({
       text: `さぁ!お前の罪を数えろ！`
     })
