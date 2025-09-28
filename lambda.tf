@@ -19,10 +19,15 @@ resource "aws_lambda_function" "mail_triggered_app" {
     "arn:aws:lambda:ap-northeast-1:133490724326:layer:AWS-Parameters-and-Secrets-Lambda-Extension:19"
   ]
 
+  // Limit concurrent executions to prevent overwhelming DynamoDB and Slack API
+  reserved_concurrent_executions = 5
+
   environment {
     variables = {
       SLACK_BOT_TOKEN_PARAM_PATH = aws_ssm_parameter.slack_bot_token.name
       SLACK_SIGNIN_SECRET_PATH   = aws_ssm_parameter.slack_signin_secret.name
+      DYNAMODB_TABLE_NAME        = aws_dynamodb_table.event_triggered.name
+      MENTION_USER_ID            = "YOUR_SLACK_ID"
     }
   }
   depends_on = [aws_cloudwatch_log_group.lambda_log_group]

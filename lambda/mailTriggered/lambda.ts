@@ -1,7 +1,9 @@
 import { Context, Callback, APIGatewayProxyEvent, APIGatewayProxyResultV2 } from "aws-lambda"
 import { App, AwsLambdaReceiver } from "@slack/bolt"
 import { getParameter } from "./getSecret";
-import { isEmailForwardingMessage, extractEmailContent, extractPaymentId } from "./eventHandler";
+import { isEmailForwardingMessage, extractEmailContent } from "./eventHandler";
+import { isPaymentEmail, getPaymentResult, extractPaymentId } from "./event/payment";
+import { getPaymentEvent } from "./database/dynamodb";
 
 let awsLambdaHandler: AwsLambdaReceiver
 let app: App;
@@ -20,34 +22,63 @@ const initializeApp = async () => {
   });
 
   // Handle all message events to detect email forwarding
-  app.event('message', async ({ event, say }) => {
+  app.event('message', async ({ event, logger, say, client }) => {
     // Check if this is an email forwarding message
     if (isEmailForwardingMessage(event)) {
-      console.log('📧 Email forwarding detected!')
+      logger.info('Email forwarding detected')
 
       const emailContent = extractEmailContent(event)
-      if (emailContent) {
-        console.log('Email content extracted:', emailContent.substring(0, 200) + '...')
+      if (!emailContent) {
+        return
+      }
 
-        const paymentId = extractPaymentId(emailContent)
-        if (paymentId) {
-          console.log('🎯 Found payment ID:', paymentId)
+      // Check if this is a payment email
+      if (!isPaymentEmail(emailContent)) {
+        return
+      }
 
-          await say({
-            text: `支払ID: ${paymentId} を検出しました！`,
-            channel: event.channel
-          })
-        }
+      const paymentId = extractPaymentId(emailContent)
+      if (!paymentId) {
+        return
+      }
+
+      const paymentResult = getPaymentResult(emailContent)
+      if (!paymentResult) {
+        return
+      }
+
+      logger.info(`Payment email detected - ID: ${paymentId}, Result: ${paymentResult}`)
+
+      // Look up the payment event in DynamoDB
+      const paymentEvent = await getPaymentEvent(paymentId)
+
+      if (!paymentEvent) {
+        // No expected result found in DB
+        await say({
+          text: 'この支払いに対する期待値がDBから見つかりませんでした',
+          channel: event.channel,
+          thread_ts: event.ts
+        })
+        return
+      }
+
+      // Check if the result matches expectations
+      if (paymentEvent.expected_result === paymentResult) {
+        // Success - add thumbs up reaction
+        await client.reactions.add({
+          channel: event.channel,
+          timestamp: event.ts,
+          name: '+1'
+        })
+      } else {
+        // Mismatch - send thread message with mention
+        await say({
+          text: `期待する結果と決済が異なります`,
+          channel: event.channel,
+          thread_ts: event.ts,
+        })
       }
     }
-  })
-
-  // Keep the hello handler for testing
-  app.message("hello", async ({ message, say }) => {
-    console.log('Hello message:', JSON.stringify(message))
-    await say({
-      text: `さぁ!お前の罪を数えろ！`
-    })
   })
 }
 
