@@ -13,14 +13,12 @@ resource "aws_lambda_function" "mail_triggered_app" {
   handler          = "lambda.handler"
   runtime          = "nodejs22.x"
   source_code_hash = data.archive_file.mail_triggered_app.output_base64sha256
+  timeout          = 10
   layers = [
     // Use Lambda extensions to use Parameter Store as a Secret Store
     // https://docs.aws.amazon.com/ja_jp/systems-manager/latest/userguide/ps-integration-lambda-extensions.html#ps-integration-lambda-extensions-add
     "arn:aws:lambda:ap-northeast-1:133490724326:layer:AWS-Parameters-and-Secrets-Lambda-Extension:19"
   ]
-
-  // Limit concurrent executions to prevent overwhelming DynamoDB and Slack API
-  reserved_concurrent_executions = 5
 
   environment {
     variables = {

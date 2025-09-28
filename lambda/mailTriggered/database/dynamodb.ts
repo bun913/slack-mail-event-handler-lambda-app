@@ -1,4 +1,4 @@
-import { DynamoDBClient, GetItemCommand } from "@aws-sdk/client-dynamodb"
+import { DynamoDBClient, GetItemCommand, DeleteItemCommand } from "@aws-sdk/client-dynamodb"
 
 const dynamoClient = new DynamoDBClient({ region: 'ap-northeast-1' })
 const TABLE_NAME = process.env.DYNAMODB_TABLE_NAME || 'TestEventTable'
@@ -37,5 +37,24 @@ export const getPaymentEvent = async (eventId: string): Promise<PaymentEvent | n
   } catch (error) {
     console.error('Error getting payment event from DynamoDB:', error)
     return null
+  }
+}
+
+// Delete payment event by eventId from DynamoDB
+export const deletePaymentEvent = async (eventId: string): Promise<boolean> => {
+  try {
+    const command = new DeleteItemCommand({
+      TableName: TABLE_NAME,
+      Key: {
+        eventId: { S: eventId }
+      }
+    })
+
+    await dynamoClient.send(command)
+    console.log(`Payment event deleted: ${eventId}`)
+    return true
+  } catch (error) {
+    console.error('Error deleting payment event from DynamoDB:', error)
+    return false
   }
 }

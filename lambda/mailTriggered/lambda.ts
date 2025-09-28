@@ -3,7 +3,7 @@ import { App, AwsLambdaReceiver } from "@slack/bolt"
 import { getParameter } from "./getSecret";
 import { isEmailForwardingMessage, extractEmailContent } from "./eventHandler";
 import { isPaymentEmail, getPaymentResult, extractPaymentId } from "./event/payment";
-import { getPaymentEvent } from "./database/dynamodb";
+import { getPaymentEvent, deletePaymentEvent } from "./database/dynamodb";
 
 let awsLambdaHandler: AwsLambdaReceiver
 let app: App;
@@ -64,12 +64,20 @@ const initializeApp = async () => {
 
       // Check if the result matches expectations
       if (paymentEvent.expected_result === paymentResult) {
-        // Success - add thumbs up reaction
+        // Success - add thumbs up reaction and delete record
         await client.reactions.add({
           channel: event.channel,
           timestamp: event.ts,
           name: '+1'
         })
+
+        // Delete the payment event from DynamoDB since test passed
+        const deleted = await deletePaymentEvent(paymentId)
+        if (deleted) {
+          logger.info(`Successfully deleted payment event: ${paymentId}`)
+        } else {
+          logger.error(`Failed to delete payment event: ${paymentId}`)
+        }
       } else {
         // Mismatch - send thread message with mention
         await say({
