@@ -1,5 +1,7 @@
 # Mail to Slack to Lambda App
 
+![design](./docs/design.drawio.svg)
+
 This repository focuses on:
 
 - Transfer Email to a specific Slack channel
